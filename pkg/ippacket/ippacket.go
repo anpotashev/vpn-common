@@ -17,6 +17,7 @@ type IPPacket interface {
 	Bytes() []byte
 	HashByDestination() (uint16, error)
 	HashBySource() (uint16, error)
+	fmt.Stringer
 }
 
 type impl struct{ gopacket.Packet }
