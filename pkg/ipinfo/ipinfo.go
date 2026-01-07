@@ -2,6 +2,7 @@ package ipinfo
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 )
 
@@ -14,6 +15,15 @@ func New(ip net.IP, mask net.IPMask, gw net.IP, mtu uint16) IPInfo {
 	copy(r[6:10], gw.To4())
 	copy(r[10:14], mask)
 	return r
+}
+
+func FromBytes(bytes []byte) (IPInfo, error) {
+	result := IPInfo{}
+	if len(bytes) != len(result) {
+		return result, fmt.Errorf("invalid IPInfo (got %d bytes)", len(bytes))
+	}
+	copy(result[:], bytes)
+	return result, nil
 }
 
 func (data IPInfo) Parse() (ip net.IP, mask net.IPMask, gw net.IP, mtu uint16) {
