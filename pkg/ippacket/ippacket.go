@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"net"
 	"strings"
 
@@ -49,20 +50,24 @@ func (i impl) HashByDestination() (uint16, error) {
 		if tcpLayer == nil {
 			return 0, ErrNoTCPLayer
 		}
+		slog.Debug("Calculating by destination. TCP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", tcpLayer.SrcPort, "Destination Port", tcpLayer.DstPort)
 		return hash(ip.DstIP, uint16(tcpLayer.DstPort), byte(layers.IPProtocolTCP)), nil
 	case layers.IPProtocolUDP:
 		udpLayer := i.Layer(layers.LayerTypeUDP).(*layers.UDP)
 		if udpLayer == nil {
 			return 0, ErrNoUDPLayer
 		}
+		slog.Debug("Calculating by destination. UDP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", udpLayer.SrcPort, "Destination Port", udpLayer.DstPort)
 		return hash(ip.DstIP, uint16(udpLayer.DstPort), byte(layers.IPProtocolUDP)), nil
 	case layers.IPProtocolIGMP:
 		igmpLayer := i.Layer(layers.LayerTypeIGMP)
 		if igmpLayer == nil {
 			return 0, ErrNoIGMPLayer
 		}
+		slog.Debug("Calculating by destination. IGMP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP)
 		return hash(ip.DstIP, 0, byte(layers.IPProtocolIGMP)), nil
 	default:
+		slog.Debug("Calculating by destination. Unsupported IP Packet type", "LayerType", ip.LayerType())
 		return 0, ErrUnsupportedIPPacketType
 	}
 }
@@ -79,20 +84,24 @@ func (i impl) HashBySource() (uint16, error) {
 		if tcpLayer == nil {
 			return 0, ErrNoTCPLayer
 		}
+		slog.Debug("Calculating by source. TCP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", tcpLayer.SrcPort, "Destination Port", tcpLayer.DstPort)
 		return hash(ip.SrcIP, uint16(tcpLayer.SrcPort), byte(layers.IPProtocolTCP)), nil
 	case layers.IPProtocolUDP:
 		udpLayer := i.Layer(layers.LayerTypeUDP).(*layers.UDP)
 		if udpLayer == nil {
 			return 0, ErrNoUDPLayer
 		}
+		slog.Debug("Calculating by source. UDP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", udpLayer.SrcPort, "Destination Port", udpLayer.DstPort)
 		return hash(ip.SrcIP, uint16(udpLayer.SrcPort), byte(layers.IPProtocolUDP)), nil
 	case layers.IPProtocolIGMP:
 		igmpLayer := i.Layer(layers.LayerTypeIGMP)
 		if igmpLayer == nil {
 			return 0, ErrNoIGMPLayer
 		}
+		slog.Debug("Calculating by source. IGMP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP)
 		return hash(ip.SrcIP, 0, byte(layers.IPProtocolIGMP)), nil
 	default:
+		slog.Debug("Calculating by source. Unsupported IP Packet type", "LayerType", ip.LayerType())
 		return 0, ErrUnsupportedIPPacketType
 	}
 }
