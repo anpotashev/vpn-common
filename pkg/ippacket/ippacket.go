@@ -56,17 +56,17 @@ func (i impl) HashByDestination() (uint16, error) {
 			return 0, ErrNoTCPLayer
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by destination. TCP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", tcpLayer.SrcPort, "Destination Port", tcpLayer.DstPort)
-		return hash(ip.DstIP, uint16(tcpLayer.DstPort), byte(layers.IPProtocolTCP)), nil
+		return hash(ip.DstIP, uint16(tcpLayer.SrcPort), uint16(tcpLayer.DstPort), byte(layers.IPProtocolTCP)), nil
 	case layers.IPProtocolUDP:
 		udpLayer := i.Layer(layers.LayerTypeUDP).(*layers.UDP)
 		if udpLayer == nil {
 			return 0, ErrNoUDPLayer
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by destination. UDP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", udpLayer.SrcPort, "Destination Port", udpLayer.DstPort)
-		return hash(ip.DstIP, uint16(udpLayer.SrcPort), byte(layers.IPProtocolUDP)), nil
+		return hash(ip.DstIP, uint16(udpLayer.DstPort), uint16(udpLayer.SrcPort), byte(layers.IPProtocolUDP)), nil
 	default:
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by source. Other.", "Source IP", ip.SrcIP, "Destination", ip.DstIP)
-		return hash(ip.DstIP, 0, byte(ip.Protocol)), nil
+		return hash(ip.DstIP, 0, 0, byte(ip.Protocol)), nil
 	}
 }
 
@@ -83,21 +83,21 @@ func (i impl) HashBySource() (uint16, error) {
 			return 0, ErrNoTCPLayer
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by source. TCP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", tcpLayer.SrcPort, "Destination Port", tcpLayer.DstPort)
-		return hash(ip.SrcIP, uint16(tcpLayer.DstPort), byte(layers.IPProtocolTCP)), nil
+		return hash(ip.SrcIP, uint16(tcpLayer.SrcPort), uint16(tcpLayer.DstPort), byte(layers.IPProtocolTCP)), nil
 	case layers.IPProtocolUDP:
 		udpLayer := i.Layer(layers.LayerTypeUDP).(*layers.UDP)
 		if udpLayer == nil {
 			return 0, ErrNoUDPLayer
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by source. UDP.", "Source IP", ip.SrcIP, "Destination", ip.DstIP, "Source Port", udpLayer.SrcPort, "Destination Port", udpLayer.DstPort)
-		return hash(ip.SrcIP, uint16(udpLayer.DstPort), byte(layers.IPProtocolUDP)), nil
+		return hash(ip.SrcIP, uint16(udpLayer.SrcPort), uint16(udpLayer.DstPort), byte(layers.IPProtocolUDP)), nil
 	default:
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Calculating by source. Other.", "Source IP", ip.SrcIP, "Destination", ip.DstIP)
-		return hash(ip.SrcIP, 0, byte(ip.Protocol)), nil
+		return hash(ip.SrcIP, 0, 0, byte(ip.Protocol)), nil
 	}
 }
 
-func hash(ip net.IP, port uint16, protocol byte) uint16 {
+func hash(ip net.IP, port1, port2 uint16, protocol byte) uint16 {
 	h := fnv.New32a()
 	ipv4 := ip.To4()
 	if ipv4 != nil {
@@ -105,9 +105,10 @@ func hash(ip net.IP, port uint16, protocol byte) uint16 {
 	} else {
 		h.Write(ip.To16())
 	}
-	var buf [3]byte
-	binary.BigEndian.PutUint16(buf[:2], port)
-	buf[2] = protocol
+	var buf [5]byte
+	binary.BigEndian.PutUint16(buf[:2], port1)
+	binary.BigEndian.PutUint16(buf[2:4], port2)
+	buf[4] = protocol
 	h.Write(buf[:])
 	return uint16(h.Sum32())
 }
