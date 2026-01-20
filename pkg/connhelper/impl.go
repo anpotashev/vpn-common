@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"time"
 )
 
 type impl struct {
@@ -56,6 +57,10 @@ func (i *impl) writeFrame(payload []byte) error {
 	}
 	_, err := i.conn.Write(payload)
 	return err
+}
+
+func (i *impl) SetReadDeadline(deadline time.Time) error {
+	return i.conn.SetReadDeadline(deadline)
 }
 
 func (i *impl) Read() ([]byte, error) {

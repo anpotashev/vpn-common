@@ -1,10 +1,14 @@
 package connhelper
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type ConnHelper interface {
 	Write(payload []byte)
 	Read() ([]byte, error)
+	SetReadDeadline(deadline time.Time) error
 }
 
 const maxFrameLength = 1500
