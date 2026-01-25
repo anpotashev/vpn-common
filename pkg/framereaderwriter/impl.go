@@ -49,7 +49,7 @@ func (i *impl) Write(payload []byte) error {
 }
 
 func (i *impl) startListeningOutChan() {
-	defer i.conn.Close()
+	defer func() { _ = i.conn.Close() }()
 	for {
 		select {
 		case payload := <-i.outChan:
@@ -88,16 +88,18 @@ func (i *impl) Read() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame length.", "Frame lenght", binary.BigEndian.Uint32(lenBuf[:]))
 		frameLen := binary.BigEndian.Uint32(lenBuf[:])
 		if frameLen > maxFrameLength {
 			return nil, ErrFrameTooLarge
 		}
-		result := make([]byte, frameLen)
-		_, err = io.ReadFull(i.conn, result)
+		payload := make([]byte, frameLen)
+		_, err = io.ReadFull(i.conn, payload)
 		if err != nil {
 			return nil, err
 		}
-		if bytes.Equal(result, ping[:]) {
+		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame payload.")
+		if bytes.Equal(payload, ping[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the ping message.")
 			err = i.writeFrame(pong[:])
 			if err != nil {
@@ -105,12 +107,15 @@ func (i *impl) Read() ([]byte, error) {
 			}
 			continue
 		}
-		if bytes.Equal(result, pong[:]) {
+		if bytes.Equal(payload, pong[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
 			err = i.conn.SetReadDeadline(time.Now().Add(pingInterval))
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
-		return result[:], nil
+		return payload[:], nil
 	}
 }
 
