@@ -53,12 +53,16 @@ func (i *impl) Write(payload []byte) error {
 func (i *impl) startListeningOutChan() {
 	defer func() { _ = i.conn.Close() }()
 	for {
+		i.logger.Log(nil, logconfig.TraceLogLevel, "Next iteration of reading outChan")
 		select {
 		case payload := <-i.outChan:
+			i.logger.Log(nil, logconfig.TraceLogLevel, "Read message from the outChan", "Payload", payload)
 			err := i.writeFrame(payload)
 			if err != nil {
+				i.logger.Error("Error writting the frame", "Error", err)
 				return
 			}
+			i.logger.Log(nil, logconfig.TraceLogLevel, "The message from the outChan sent", "Payload", payload)
 		case <-i.ctx.Done():
 			return
 		}
