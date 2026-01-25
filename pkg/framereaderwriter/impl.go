@@ -64,14 +64,17 @@ func (i *impl) startListeningOutChan() {
 }
 
 func (i *impl) writeFrame(payload []byte) error {
+	i.logger.Log(nil, logconfig.TraceLogLevel, "Start writing frame.", "Payload", payload)
 	if len(payload) > maxFrameLength {
 		return ErrFrameTooLarge
 	}
 	var pktLength [4]byte
 	binary.BigEndian.PutUint32(pktLength[:], uint32(len(payload)))
+	i.logger.Log(nil, logconfig.TraceLogLevel, "Writing frame length.")
 	if _, err := i.conn.Write(pktLength[:]); err != nil {
 		return err
 	}
+	i.logger.Log(nil, logconfig.TraceLogLevel, "Writing payload.")
 	_, err := i.conn.Write(payload)
 	return err
 }
