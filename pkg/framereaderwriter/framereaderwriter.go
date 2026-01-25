@@ -1,11 +1,11 @@
-package connhelper
+package framereaderwriter
 
 import (
 	"fmt"
 	"time"
 )
 
-type ConnHelper interface {
+type FrameReaderWriter interface {
 	Write(payload []byte)
 	Read() ([]byte, error)
 	SetReadDeadline(deadline time.Time) error

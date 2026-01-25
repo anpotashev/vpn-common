@@ -1,4 +1,4 @@
-package connhelper
+package framereaderwriter
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type impl struct {
 	ctx     context.Context
 }
 
-func New(ctx context.Context, conn net.Conn) ConnHelper {
+func New(ctx context.Context, conn net.Conn) FrameReaderWriter {
 	result := &impl{
 		conn:    conn,
 		outChan: make(chan []byte, 1024),
