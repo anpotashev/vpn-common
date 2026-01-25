@@ -46,6 +46,7 @@ func (i *impl) Write(payload []byte) error {
 		i.logger.Log(nil, logconfig.TraceLogLevel, "The payload successfully written to the outChan.", "Payload", payload)
 		return nil
 	case <-i.ctx.Done():
+		i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
 		return i.ctx.Err()
 	}
 }
@@ -59,11 +60,12 @@ func (i *impl) startListeningOutChan() {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Read message from the outChan", "Payload", payload)
 			err := i.writeFrame(payload)
 			if err != nil {
-				i.logger.Error("Error writting the frame", "Error", err)
+				i.logger.Error("Error writing the frame", "Error", err)
 				return
 			}
 			i.logger.Log(nil, logconfig.TraceLogLevel, "The message from the outChan sent", "Payload", payload)
 		case <-i.ctx.Done():
+			i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
 			return
 		}
 	}
@@ -72,22 +74,28 @@ func (i *impl) startListeningOutChan() {
 func (i *impl) writeFrame(payload []byte) error {
 	i.logger.Log(nil, logconfig.TraceLogLevel, "Start writing frame.", "Payload", payload)
 	if len(payload) > maxFrameLength {
+		i.logger.Error("Trying to write the large payload", "Payload length", len(payload))
 		return ErrFrameTooLarge
 	}
 	var pktLength [4]byte
 	binary.BigEndian.PutUint32(pktLength[:], uint32(len(payload)))
 	i.logger.Log(nil, logconfig.TraceLogLevel, "Writing frame length.")
 	if _, err := i.conn.Write(pktLength[:]); err != nil {
+		i.logger.Error("Error writing the length header to the connection", "Error", err)
 		return err
 	}
 	i.logger.Log(nil, logconfig.TraceLogLevel, "Writing payload.")
 	_, err := i.conn.Write(payload)
+	if err != nil {
+		i.logger.Error("Error writing the payload to the connection", "Error", err)
+	}
 	return err
 }
 
 func (i *impl) Read() ([]byte, error) {
 	select {
 	case <-i.ctx.Done():
+		i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
 		return nil, i.ctx.Err()
 	default:
 	}
@@ -95,16 +103,19 @@ func (i *impl) Read() ([]byte, error) {
 		var lenBuf [4]byte
 		_, err := io.ReadFull(i.conn, lenBuf[:])
 		if err != nil {
+			i.logger.Error("Error reading the length header from the connection", "Error", err)
 			return nil, err
 		}
-		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame length.", "Frame lenght", binary.BigEndian.Uint32(lenBuf[:]))
+		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame length.", "Frame length", binary.BigEndian.Uint32(lenBuf[:]))
 		frameLen := binary.BigEndian.Uint32(lenBuf[:])
 		if frameLen > maxFrameLength {
+			i.logger.Error("Received length is too large.")
 			return nil, ErrFrameTooLarge
 		}
 		payload := make([]byte, frameLen)
 		_, err = io.ReadFull(i.conn, payload)
 		if err != nil {
+			i.logger.Error("Error reading the the payload from the connection", "Error", err)
 			return nil, err
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame payload.")
@@ -120,6 +131,7 @@ func (i *impl) Read() ([]byte, error) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
 			err = i.conn.SetReadDeadline(time.Now().Add(pingInterval))
 			if err != nil {
+				i.logger.Error("Error setting the deadline.", "Error", err)
 				return nil, err
 			}
 			continue
@@ -133,6 +145,7 @@ func (i *impl) startPing() {
 	defer ticker.Stop()
 	err := i.conn.SetReadDeadline(time.Now().Add(pingInterval))
 	if err != nil {
+		i.logger.Error("Error setting the deadline.", "Error", err)
 		i.cancel()
 		return
 	}
@@ -142,10 +155,12 @@ func (i *impl) startPing() {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Sending ping")
 			err = i.Write(ping)
 			if err != nil {
+				i.logger.Error("Error writing the ping message", "Error", err)
 				i.cancel()
 				return
 			}
 		case <-i.ctx.Done():
+			i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
 			return
 		}
 	}
