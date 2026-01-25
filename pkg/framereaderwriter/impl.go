@@ -24,10 +24,12 @@ func New(ctx context.Context, conn net.Conn) FrameReaderWriter {
 	return result
 }
 
-func (i *impl) Write(payload []byte) {
+func (i *impl) Write(payload []byte) error {
 	select {
 	case i.outChan <- payload:
+		return nil
 	case <-i.ctx.Done():
+		return i.ctx.Err()
 	}
 }
 

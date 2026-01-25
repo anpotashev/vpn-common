@@ -6,9 +6,9 @@ import (
 )
 
 type FrameReaderWriter interface {
-	Write(payload []byte)
+	Write([]byte) error
 	Read() ([]byte, error)
-	SetReadDeadline(deadline time.Time) error
+	SetReadDeadline(time.Time) error
 }
 
 const maxFrameLength = 1500
