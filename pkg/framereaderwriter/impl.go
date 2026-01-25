@@ -40,8 +40,10 @@ func New(ctx context.Context, logger *slog.Logger, conn net.Conn) FrameReaderWri
 }
 
 func (i *impl) Write(payload []byte) error {
+	i.logger.Log(nil, logconfig.TraceLogLevel, "Writing payload to the outChan.", "Payload", payload)
 	select {
 	case i.outChan <- payload:
+		i.logger.Log(nil, logconfig.TraceLogLevel, "The payload successfully written to the outChan.", "Payload", payload)
 		return nil
 	case <-i.ctx.Done():
 		return i.ctx.Err()
@@ -104,7 +106,7 @@ func (i *impl) Read() ([]byte, error) {
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame payload.")
 		if bytes.Equal(payload, ping[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the ping message.")
-			err = i.writeFrame(pong[:])
+			err = i.Write(pong[:])
 			if err != nil {
 				return nil, err
 			}
@@ -122,7 +124,7 @@ func (i *impl) Read() ([]byte, error) {
 	}
 }
 
-func (i impl) startPing() {
+func (i *impl) startPing() {
 	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
 	err := i.conn.SetReadDeadline(time.Now().Add(pingInterval))
