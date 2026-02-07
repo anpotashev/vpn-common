@@ -24,6 +24,7 @@ var ping = []byte{0}
 var pong = []byte{1}
 
 const pingInterval = time.Second * 10
+const pingGap = time.Second
 
 func New(ctx context.Context, logger *slog.Logger, conn net.Conn) FrameReaderWriter {
 	ctx, cancel := context.WithCancel(ctx)
@@ -129,7 +130,7 @@ func (i *impl) Read() ([]byte, error) {
 		}
 		if bytes.Equal(payload, pong[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
-			err = i.conn.SetReadDeadline(time.Now().Add(pingInterval))
+			err = i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
 			if err != nil {
 				i.logger.Error("Error setting the deadline.", "Error", err)
 				return nil, err
@@ -143,7 +144,7 @@ func (i *impl) Read() ([]byte, error) {
 func (i *impl) startPing() {
 	ticker := time.NewTicker(pingInterval)
 	defer ticker.Stop()
-	err := i.conn.SetReadDeadline(time.Now().Add(pingInterval))
+	err := i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
 	if err != nil {
 		i.logger.Error("Error setting the deadline.", "Error", err)
 		i.cancel()
