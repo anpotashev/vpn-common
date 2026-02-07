@@ -130,11 +130,13 @@ func (i *impl) Read() ([]byte, error) {
 		}
 		if bytes.Equal(payload, pong[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
-			err = i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
+			newDeadLine := time.Now().Add(pingInterval).Add(pingGap)
+			err = i.conn.SetReadDeadline(newDeadLine)
 			if err != nil {
 				i.logger.Error("Error setting the deadline.", "Error", err)
 				return nil, err
 			}
+			i.logger.Log(nil, logconfig.TraceLogLevel, "The new read deadline was set.", "New Deadline", newDeadLine)
 			continue
 		}
 		return payload[:], nil
