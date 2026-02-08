@@ -109,6 +109,13 @@ func (i *impl) startReading() {
 		_, err := io.ReadFull(i.conn, lenBuf[:])
 		if err != nil {
 			i.logger.Error("Error reading the length header from the connection", "Error", err)
+			if err == io.EOF {
+				i.logger.Error("EOF: peer closed connection")
+			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				i.logger.Error("Timeout")
+			} else {
+				i.logger.Error("Read error", "err", err)
+			}
 			return
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame length.", "Frame length", binary.BigEndian.Uint32(lenBuf[:]))
