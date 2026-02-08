@@ -103,9 +103,7 @@ func (i *impl) startReading() {
 		return
 	default:
 	}
-	if err := i.sendPing(); err != nil {
-		return
-	}
+	i.schedulePing()
 	for {
 		var lenBuf [4]byte
 		_, err := io.ReadFull(i.conn, lenBuf[:])
@@ -136,10 +134,7 @@ func (i *impl) startReading() {
 		}
 		if bytes.Equal(payload, pong[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
-			if err = i.sendPing(); err != nil {
-				return
-			}
-			continue
+			i.schedulePing()
 		}
 		i.inChan <- payload[:]
 	}
@@ -154,16 +149,18 @@ func (i *impl) Read() ([]byte, error) {
 	}
 }
 
-func (i *impl) sendPing() error {
-	err := i.Write(ping)
-	if err != nil {
-		i.logger.Error("Error writing the ping message", "Error", err)
-		return err
-	}
-	err = i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
-	if err != nil {
-		i.logger.Error("Error setting the deadline.", "Error", err)
-		return err
-	}
-	return nil
+func (i *impl) schedulePing() {
+	i.logger.Log(nil, logconfig.TraceLogLevel, "Scheduling the next ping")
+	go func() {
+		time.Sleep(pingInterval)
+		err := i.Write(ping)
+		if err != nil {
+			i.logger.Error("Error writing the ping message", "Error", err)
+			i.cancel()
+		}
+		err = i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
+		if err != nil {
+			i.cancel()
+		}
+	}()
 }
