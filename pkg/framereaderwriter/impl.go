@@ -15,6 +15,7 @@ import (
 type impl struct {
 	conn    net.Conn
 	outChan chan []byte
+	inChan  chan []byte
 	ctx     context.Context
 	cancel  context.CancelFunc
 	logger  *slog.Logger
@@ -31,12 +32,13 @@ func New(ctx context.Context, logger *slog.Logger, conn net.Conn) FrameReaderWri
 	result := &impl{
 		conn:    conn,
 		outChan: make(chan []byte, 1024),
+		inChan:  make(chan []byte, 1024),
 		ctx:     ctx,
 		cancel:  cancel,
 		logger:  logger.With("pkt", "framereaderwriter"),
 	}
 	go result.startListeningOutChan()
-	go result.startPing()
+	go result.startReading()
 	return result
 }
 
@@ -93,78 +95,75 @@ func (i *impl) writeFrame(payload []byte) error {
 	return err
 }
 
-func (i *impl) Read() ([]byte, error) {
+func (i *impl) startReading() {
+	defer i.cancel()
 	select {
 	case <-i.ctx.Done():
 		i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
-		return nil, i.ctx.Err()
+		return
 	default:
+	}
+	if err := i.sendPing(); err != nil {
+		return
 	}
 	for {
 		var lenBuf [4]byte
 		_, err := io.ReadFull(i.conn, lenBuf[:])
 		if err != nil {
 			i.logger.Error("Error reading the length header from the connection", "Error", err)
-			return nil, err
+			return
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame length.", "Frame length", binary.BigEndian.Uint32(lenBuf[:]))
 		frameLen := binary.BigEndian.Uint32(lenBuf[:])
 		if frameLen > maxFrameLength {
 			i.logger.Error("Received length is too large.")
-			return nil, ErrFrameTooLarge
+			return
 		}
 		payload := make([]byte, frameLen)
 		_, err = io.ReadFull(i.conn, payload)
 		if err != nil {
 			i.logger.Error("Error reading the the payload from the connection", "Error", err)
-			return nil, err
+			return
 		}
 		i.logger.Log(nil, logconfig.TraceLogLevel, "Read frame payload.")
 		if bytes.Equal(payload, ping[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the ping message.")
 			err = i.Write(pong[:])
 			if err != nil {
-				return nil, err
+				return
 			}
 			continue
 		}
 		if bytes.Equal(payload, pong[:]) {
 			i.logger.Log(nil, logconfig.TraceLogLevel, "Received the pong message.")
-			newDeadLine := time.Now().Add(pingInterval).Add(pingGap)
-			err = i.conn.SetReadDeadline(newDeadLine)
-			if err != nil {
-				i.logger.Error("Error setting the deadline.", "Error", err)
-				return nil, err
+			if err = i.sendPing(); err != nil {
+				return
 			}
-			i.logger.Log(nil, logconfig.TraceLogLevel, "The new read deadline was set.", "New Deadline", newDeadLine)
 			continue
 		}
-		return payload[:], nil
+		i.inChan <- payload[:]
 	}
 }
 
-func (i *impl) startPing() {
-	ticker := time.NewTicker(pingInterval)
-	defer ticker.Stop()
-	err := i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
+func (i *impl) Read() ([]byte, error) {
+	select {
+	case payload := <-i.inChan:
+		return payload, nil
+	case <-i.ctx.Done():
+		return nil, i.ctx.Err()
+	}
+}
+
+func (i *impl) sendPing() error {
+	err := i.Write(ping)
+	if err != nil {
+		i.logger.Error("Error writing the ping message", "Error", err)
+		return err
+	}
+	err = i.conn.SetReadDeadline(time.Now().Add(pingInterval).Add(pingGap))
 	if err != nil {
 		i.logger.Error("Error setting the deadline.", "Error", err)
-		i.cancel()
-		return
+		return err
 	}
-	for {
-		select {
-		case <-ticker.C:
-			i.logger.Log(nil, logconfig.TraceLogLevel, "Sending ping")
-			err = i.Write(ping)
-			if err != nil {
-				i.logger.Error("Error writing the ping message", "Error", err)
-				i.cancel()
-				return
-			}
-		case <-i.ctx.Done():
-			i.logger.Warn("Received ctx.done", "Error", i.ctx.Err())
-			return
-		}
-	}
+	return nil
 }
